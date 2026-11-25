@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>DeltaTranslator.Patcher</AssemblyName>
+    <UndertaleModLibProject Condition="'$(UndertaleModLibProject)' == ''">../vendor/UndertaleModTool/UndertaleModLib/UndertaleModLib.csproj</UndertaleModLibProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(UndertaleModLibProject)" />
+    <InternalsVisibleTo Include="TestArchives" />
+    <Content Include="../Fonts/Overlay/OFL.txt" Link="Monocraft-OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="../Fonts/Overlay/Determination-Source.txt" Link="Determination-Source.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <EmbeddedResource Include="../Code/*.gml" LogicalName="DeltaTranslator.Code.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../Fonts/Overlay/overlay.png;../Fonts/Overlay/glyphs.csv;../Fonts/Overlay/overlay-ru.png;../Fonts/Overlay/glyphs-ru.csv" LogicalName="DeltaTranslator.Fonts.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <Target Name="CheckDependencies" BeforeTargets="PrepareForBuild" Condition="!Exists('$(UndertaleModLibProject)')">
+    <Error Text="UndertaleModLib not found. Run git submodule update --init --recursive." />
+  </Target>
+</Project>

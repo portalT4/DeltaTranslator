@@ -1,0 +1,145 @@
+name: Patcher and installers
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Compile the patch against synthetic assets
+        run: dotnet run --project tests/TestArchives.csproj -c Release -- --synthetic
+      - name: Build the standalone CLI and Inno Setup installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
+          }
+          ./installer/build-windows.ps1 -InnoCompiler $iscc
+      - name: Check that the published CLI starts
+        shell: pwsh
+        run: |
+          & ./artifacts/patcher/DeltaTranslator.Patcher.exe --help
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeltaTranslator-Setup-win-x64
+          path: artifacts/installer/DeltaTranslator-Setup-win-x64.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeltaTranslator-CLI-win-x64
+          path: artifacts/patcher/
+          if-no-files-found: error
+
+  package-desktop:
+    name: Desktop setup (${{ matrix.rid }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-22.04
+            extension: AppImage
+          - rid: osx-arm64
+            runner: macos-15
+            extension: zip
+          - rid: osx-x64
+            runner: macos-15-intel
+            extension: zip
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Fetch the AppImage build tool
+        if: matrix.rid == 'linux-x64'
+        run: |
+          tool="$RUNNER_TEMP/appimagetool.AppImage"
+          curl --fail --show-error --silent --location --retry 3 \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage -o "$tool"
+          chmod +x "$tool"
+          echo "APPIMAGETOOL=$tool" >> "$GITHUB_ENV"
+      - name: Build and open the packaged GUI
+        shell: bash
+        env:
+          RID: ${{ matrix.rid }}
+          EXT: ${{ matrix.extension }}
+        run: |
+          log=$(mktemp)
+          annotate_failure() {
+            message=$(tail -n 18 "$log")
+            message=${message//%/%25}
+            message=${message//$'\r'/%0D}
+            message=${message//$'\n'/%0A}
+            printf '::error::%s\n' "$message"
+          }
+          trap annotate_failure ERR
+          bash installer/build-desktop.sh "$RID" 2>&1 | tee -a "$log"
+          setup="$PWD/artifacts/installer/DeltaTranslator-Setup-$RID.$EXT"
+          if [[ "$RID" == linux-x64 ]]; then
+            timeout 60s xvfb-run -a env APPIMAGE_EXTRACT_AND_RUN=1 "$setup" --smoke-test 2>&1 | tee -a "$log"
+          else
+            dir=$(mktemp -d)
+            trap 'rm -rf -- "$dir"' EXIT
+            ditto -x -k "$setup" "$dir" 2>&1 | tee -a "$log"
+            codesign --verify --deep --strict "$dir/DeltaTranslator.app" 2>&1 | tee -a "$log"
+            perl -e 'alarm shift; exec @ARGV' 60 "$dir/DeltaTranslator.app/Contents/MacOS/DeltaTranslator.Setup" --smoke-test 2>&1 | tee -a "$log"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeltaTranslator-Setup-${{ matrix.rid }}
+          path: artifacts/installer/DeltaTranslator-Setup-${{ matrix.rid }}.${{ matrix.extension }}
+          if-no-files-found: error
+
+  publish-release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [test-and-package, package-desktop]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify the release tag points to a main commit and matches the installer version
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor HEAD origin/main
+          version=$(sed -n 's/^AppVersion=\([0-9.]*\).*$/\1/p' installer/DeltaTranslator.iss)
+          [[ "$GITHUB_REF_NAME" == "v$version" ]]
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: DeltaTranslator-Setup-*
+          merge-multiple: true
+          path: release-assets
+      - name: Publish to Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+          --title "DeltaTranslator $GITHUB_REF_NAME"
+          release-assets/DeltaTranslator-Setup-win-x64.exe
+          release-assets/DeltaTranslator-Setup-linux-x64.AppImage
+          release-assets/DeltaTranslator-Setup-osx-arm64.zip
+          release-assets/DeltaTranslator-Setup-osx-x64.zip

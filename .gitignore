@@ -1,0 +1,25 @@
+# Среды разработки и временные файлы
+.idea/
+.vs/
+*.user
+bin/
+obj/
+
+Cover.psd
+Обложка.psd
+# Patcher and installer output
+artifacts/
+
+# Local DELTARUNE archives and backups are not source files.
+/datawin/
+/DeltaTranslator-cleanup/
+*.win
+*.ios
+*.unx
+*.deltatranslator*.bak
+
+# Старые имена и локальные выгрузки ресурсов игры
+/Обложка.png
+/Скриншоты/
+/Fonts/fnt_*.png
+/Fonts/glyphs_fnt_*.csv

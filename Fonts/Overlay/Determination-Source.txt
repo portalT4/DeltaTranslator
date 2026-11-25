@@ -1,0 +1,20 @@
+Determination with Cyrillic glyphs
+Source: https://github.com/StackTheFennec/Determination/tree/f064e5afc1163b8d17c6bdedf6cebe280df892c1
+
+Credits from the source font:
+8-bit Operator (c) 2009 - 2016 Grand Chaos Productions.
+Based on spritesheet by Leafia_Barrett.
+Modified by theFIZZYnator.
+Cyrillic glyphs by Dartjuk. Fixed and adapted by Yurijmi.
+Undertale is copyright and intellectual property of Toby Fox.
+
+Determination Mono Russian adaptation supplied by DubstepDude (2025).
+Source: Fonts/determination-mono.ttf, contributed in commit 2e5e8c6.
+The source metadata identifies the face as “8bitoperator JVE (RUS)” and records
+“Copyright nipcen 2011” and CC BY-NC-SA 3.0:
+https://creativecommons.org/licenses/by-nc-sa/3.0/
+
+DeltaTranslator rasterizes the contributed face into a bitmap for its Russian
+translation overlay. The adapted glyphs from this face in overlay-ru.png and
+its metrics retain the CC BY-NC-SA 3.0 terms; other glyph sources retain their
+own notices. These font terms are separate from the patcher code license.
